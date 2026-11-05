@@ -1,0 +1,4 @@
+# Audit Demo and imported modules named Demo.* (module names, not namespaces).
+modules = ["Demo"]
+allowed_axioms = ["propext", "Classical.choice", "Quot.sound"]
+timeout_seconds = 120

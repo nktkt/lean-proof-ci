@@ -1,0 +1,61 @@
+{
+  "allowed_axioms": [
+    "Classical.choice",
+    "Quot.sound",
+    "propext"
+  ],
+  "checker_version": "0.1.0",
+  "declarations": [
+    {
+      "axioms": [],
+      "definition_hash": null,
+      "kind": "theorem",
+      "line": 12,
+      "module": "Demo.Basic",
+      "name": "Demo.add_comm",
+      "statement": "∀ (n m : Nat), n + m = m + n",
+      "statement_hash": "eff72df96109a15058a2956d5d61f3e14145256c7c78a6842559992d3a60fa81"
+    },
+    {
+      "axioms": [],
+      "definition_hash": null,
+      "kind": "theorem",
+      "line": 9,
+      "module": "Demo.Basic",
+      "name": "Demo.add_zero",
+      "statement": "∀ (n : Nat), n + 0 = n",
+      "statement_hash": "f7ca7cb4cba742f34d2a077323aed9a6a83c175ca6d48a8ba689e5e6bbb3bc23"
+    },
+    {
+      "axioms": [],
+      "definition_hash": "0dae6b371aa39ce454532f083588c723a5cc39f6454ea6c91729fed419a9925b",
+      "kind": "definition",
+      "line": 3,
+      "module": "Demo.Basic",
+      "name": "Demo.twice",
+      "statement": "Nat → Nat",
+      "statement_hash": "51e6b2487e312353b20a8cde305d8898f092af8aa172a7a05302736af2d09482"
+    },
+    {
+      "axioms": [],
+      "definition_hash": null,
+      "kind": "theorem",
+      "line": 6,
+      "module": "Demo.Basic",
+      "name": "Demo.twice_eq_add",
+      "statement": "∀ (n : Nat), Demo.twice n = n + n",
+      "statement_hash": "59eba7221fac68abe4a7d1dc29aea805ddc0efd2a5eda9e3d33ecf7d6fdbdcbf"
+    }
+  ],
+  "dependency_manifest_hash": "a34a6cce3f1e68d4c64f4a1bffe3bead02f8d6e49486cb9ee850460ff794f774",
+  "lean_version": "4.29.1",
+  "modules": [
+    "Demo",
+    "Demo.Basic"
+  ],
+  "roots": [
+    "Demo"
+  ],
+  "schema_version": 1,
+  "toolchain": "leanprover/lean4:v4.29.1"
+}

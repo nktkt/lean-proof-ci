@@ -1,0 +1,6 @@
+name = "proofCiDemo"
+version = "0.1.0"
+defaultTargets = ["Demo"]
+
+[[lean_lib]]
+name = "Demo"

@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+build/
+dist/
+.lake/
+.proof-ci/
+.lean-proof-ci-*/
+.DS_Store

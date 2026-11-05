@@ -1,0 +1,9 @@
+include LICENSE README.md README.ja.md CONTRIBUTING.md
+recursive-include .github *.yml
+recursive-include lean_proof_ci *.lean
+recursive-include examples *.lean *.toml *.json lean-toolchain
+recursive-include tests *.py
+prune examples/basic/.lake
+prune examples/basic/.proof-ci
+prune examples/broken/.lake
+prune examples/broken/.proof-ci

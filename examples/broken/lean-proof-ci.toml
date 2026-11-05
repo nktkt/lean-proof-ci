@@ -1,0 +1,2 @@
+modules = ["Broken"]
+allowed_axioms = ["propext", "Classical.choice", "Quot.sound"]

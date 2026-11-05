@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "lean-proof-ci"
+version = "0.1.0"
+description = "Audit Lean declarations, axiom dependencies, and statement changes in CI"
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+license-files = ["LICENSE"]
+keywords = ["lean", "formal-verification", "proof", "ci"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Mathematics",
+]
+
+[project.scripts]
+lean-proof-ci = "lean_proof_ci.cli:main"
+
+[tool.setuptools]
+packages = ["lean_proof_ci"]
+
+[tool.setuptools.package-data]
+lean_proof_ci = ["Inspector.lean"]

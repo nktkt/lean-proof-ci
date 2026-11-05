@@ -1,0 +1,22 @@
+schema_version = 1
+
+[[items]]
+id = "twice"
+title = "2倍の定義と加算の対応"
+declaration = "Demo.twice_eq_add"
+source = "specs/twice.md"
+reference = "Local example specification / twice / v1"
+
+[[items]]
+id = "add-zero"
+title = "自然数の右側に0を足す"
+declaration = "Demo.add_zero"
+source = "specs/add-zero.md"
+reference = "Local example specification / add-zero / v1"
+
+[[items]]
+id = "add-comm"
+title = "自然数の加法の交換法則"
+declaration = "Demo.add_comm"
+source = "specs/add-comm.md"
+reference = "Local example specification / add-comm / v1"

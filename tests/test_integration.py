@@ -76,6 +76,8 @@ class LeanIntegrationTests(unittest.TestCase):
         report = self.invoke(expected=1)
         affected = {f["declaration"] for f in report["findings"] if f["code"] == "incomplete_proof"}
         self.assertTrue({"Unrelated.helper", "consumer"} <= affected)
+        consumer = next(f for f in report["findings"] if f["declaration"] == "consumer")
+        self.assertEqual(consumer["paths"]["sorryAx"], ["consumer", "Unrelated.helper", "sorryAx"])
 
     def test_private_theorem_and_unused_definition_are_audited(self):
         self.append("private theorem hidden : False := by sorry\ndef unfinishedValue : Nat := by sorry")
@@ -89,6 +91,25 @@ class LeanIntegrationTests(unittest.TestCase):
         report = self.invoke(expected=1)
         affected = {f["declaration"] for f in report["findings"] if f["code"] == "unapproved_axiom"}
         self.assertTrue({"pretend", "arbitrary"} <= affected)
+        consumer = next(f for f in report["findings"] if f["declaration"] == "arbitrary")
+        self.assertEqual(consumer["paths"]["pretend"], ["arbitrary", "pretend"])
+
+    def test_rewritten_working_baseline_does_not_hide_change_from_git(self):
+        def git(*args):
+            return subprocess.run(
+                ["git", "-c", "user.name=Proof CI tests", "-c", "user.email=tests@example.invalid",
+                 "-c", "commit.gpgsign=false", *args],
+                cwd=self.project, capture_output=True, text=True, check=True,
+            )
+        git("init", "-q", "-b", "main")
+        git("add", "lean-proof-ci.baseline.json")
+        git("commit", "-qm", "Reviewed baseline")
+        self.source.write_text(self.source.read_text().replace("theorem add_zero (n : Nat)", "theorem add_zero (n : Nat) (_h : n = 0)"))
+        self.invoke(command="snapshot")
+        self.invoke("--baseline", str(self.project / "lean-proof-ci.baseline.json"))
+        report = self.invoke("--baseline-ref", "HEAD", expected=1)
+        self.assertIn("statement_changed", [c["code"] for c in report["changes"]])
+        self.assertEqual(report["baseline_source"]["commit"], git("rev-parse", "HEAD").stdout.strip())
 
     def test_axioms_inside_axiom_types_are_not_hidden(self):
         self.append("axiom seed : Nat\naxiom witness : seed = seed\ntheorem useWitness : seed = seed := witness")

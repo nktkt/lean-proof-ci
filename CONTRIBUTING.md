@@ -21,6 +21,12 @@ must increment its schema version and document the migration.
 Never turn an inspector/build error into a successful audit. Preserve the distinction
 between an audit failure (exit 1) and an operational/configuration failure (exit 2).
 
+For correspondence-review changes, test the real Lean acceptance/staleness lifecycle,
+including source edits, added assumptions, referenced definition edits, and proof-only
+edits. Keep synthetic test/demo records clearly labeled; do not add human review records
+on behalf of another person. `review` is the CI gate; `accept` exits 0 when one record is
+saved even if other items remain pending. See [ProofReview](PROOFREVIEW.ja.md).
+
 Review the example's snapshot diff if updating it. CI must compare against the checked-in
 baseline rather than regenerate it. Version support claims should identify the Lean
 versions actually tested. The broken example is intentionally expected to fail.

@@ -1,0 +1,83 @@
+name: Lean Proof CI
+description: Audit Lean axiom dependencies and compare statements against a reviewed Git baseline.
+branding:
+  icon: check-circle
+  color: blue
+inputs:
+  project:
+    description: Lake project directory, relative to the workspace.
+    default: '.'
+  baseline:
+    description: Baseline JSON file, relative to the workspace. Mutually exclusive with baseline-ref.
+    default: ''
+  baseline-ref:
+    description: Git commit, branch, or tag containing the reviewed baseline. Fetch it before running.
+    default: ''
+  baseline-path:
+    description: Baseline path relative to the Git root; requires baseline-ref. Defaults to PROJECT/lean-proof-ci.baseline.json.
+    default: ''
+  report-directory:
+    description: Output directory, relative to the workspace.
+    default: '.proof-ci'
+  timeout:
+    description: Timeout in seconds per Lake/Lean command.
+    default: '180'
+outputs:
+  exit-code:
+    description: '0 = pass, 1 = audit failure, 2 = operational error.'
+    value: ${{ steps.audit.outputs.exit-code }}
+  status:
+    description: 'pass, fail, or error.'
+    value: ${{ steps.audit.outputs.status }}
+  json-report:
+    description: Absolute path to the JSON report, if generated.
+    value: ${{ steps.audit.outputs.json-report }}
+  markdown-report:
+    description: Absolute path to the Markdown report, if generated.
+    value: ${{ steps.audit.outputs.markdown-report }}
+  html-report:
+    description: Absolute path to the offline HTML report, if generated.
+    value: ${{ steps.audit.outputs.html-report }}
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+    - name: Install the pinned checker source
+      shell: bash
+      env:
+        PROOF_CI_ACTION_PATH: ${{ github.action_path }}
+      run: python -m pip install --disable-pip-version-check "$PROOF_CI_ACTION_PATH"
+    - name: Audit Lean declarations
+      id: audit
+      shell: bash
+      env:
+        PROOF_CI_PROJECT: ${{ inputs.project }}
+        PROOF_CI_BASELINE: ${{ inputs.baseline }}
+        PROOF_CI_BASELINE_REF: ${{ inputs.baseline-ref }}
+        PROOF_CI_BASELINE_PATH: ${{ inputs.baseline-path }}
+        PROOF_CI_REPORT_DIRECTORY: ${{ inputs.report-directory }}
+        PROOF_CI_TIMEOUT: ${{ inputs.timeout }}
+      run: |
+        case "$PROOF_CI_REPORT_DIRECTORY" in
+          *$'\n'*|*$'\r'*) echo 'Report directory cannot contain newlines' >&2; exit 2 ;;
+        esac
+        report_dir="$(python -c 'import os; from pathlib import Path; print(Path(os.environ["PROOF_CI_REPORT_DIRECTORY"]).resolve())')"
+        args=(check "$PROOF_CI_PROJECT" --timeout "$PROOF_CI_TIMEOUT"
+          --json "$report_dir/report.json" --markdown "$report_dir/report.md" --html "$report_dir/report.html")
+        if [ -n "$PROOF_CI_BASELINE" ]; then args+=(--baseline "$PROOF_CI_BASELINE"); fi
+        if [ -n "$PROOF_CI_BASELINE_REF" ]; then args+=(--baseline-ref "$PROOF_CI_BASELINE_REF"); fi
+        if [ -n "$PROOF_CI_BASELINE_PATH" ]; then args+=(--baseline-path "$PROOF_CI_BASELINE_PATH"); fi
+        result=0
+        python -I -m lean_proof_ci "${args[@]}" || result=$?
+        case "$result" in
+          0) status=pass ;;
+          1) status=fail ;;
+          *) status=error ;;
+        esac
+        printf 'exit-code=%s\nstatus=%s\n' "$result" "$status" >> "$GITHUB_OUTPUT"
+        printf 'json-report=%s/report.json\nmarkdown-report=%s/report.md\nhtml-report=%s/report.html\n' \
+          "$report_dir" "$report_dir" "$report_dir" >> "$GITHUB_OUTPUT"
+        if [ -f "$report_dir/report.md" ]; then cat "$report_dir/report.md" >> "$GITHUB_STEP_SUMMARY"; fi
+        exit "$result"

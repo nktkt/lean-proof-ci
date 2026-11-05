@@ -71,6 +71,21 @@ class CoreTests(unittest.TestCase):
         with self.assertRaises(AuditError):
             validate_snapshot(snapshot)
 
+    def test_optional_paths_preserve_old_snapshot_compatibility(self):
+        snapshot = example_snapshot()
+        validate_snapshot(snapshot)
+        snapshot["declarations"][0]["axiom_paths"] = {"sorryAx": ["wrong", "sorryAx"]}
+        with self.assertRaises(AuditError):
+            validate_snapshot(snapshot)
+
+    def test_html_output_cannot_overwrite_a_baseline(self):
+        path = self.root / "lean-proof-ci.baseline.json"
+        path.write_text("keep me")
+        with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):
+            code = main(["check", str(self.root), "--html", str(path)])
+        self.assertEqual(code, 2)
+        self.assertEqual(path.read_text(), "keep me")
+
     def test_missing_baseline_is_an_operational_error_with_report(self):
         (self.root / "lean-proof-ci.toml").write_text('modules = ["Demo"]')
         with redirect_stdout(io.StringIO()), redirect_stderr(io.StringIO()):

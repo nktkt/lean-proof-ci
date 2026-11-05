@@ -49,7 +49,43 @@ private def trackedBody : ConstantInfo → Option Expr
   | .opaqueInfo v => some v.value
   | _ => none
 
-def inspect (roots : Array String) (output : String) : CommandElabM Unit := do
+/-- Follow the same kernel constants as collectAxioms, including axiom types. -/
+private def dependencies (env : Environment) (name : Name) : Array Name := Id.run do
+  let some info := env.checked.get.find? name | return #[]
+  let mut deps := info.type.getUsedConstants
+  if let some value := info.value? (allowOpaque := true) then
+    deps := deps ++ value.getUsedConstants
+  if let .inductInfo value := info then
+    deps := deps ++ value.ctors.toArray
+  return deps.qsort (fun a b => a.toString < b.toString)
+
+/-- One shortest path per rejected axiom. Bounds affect explanations, never the audit. -/
+private def axiomPaths (env : Environment) (start : Name) (targets : Array Name) : Json := Id.run do
+  if targets.isEmpty then return Json.mkObj []
+  let mut queue := #[start]
+  let mut cursor := 0
+  let mut parents : Std.HashMap Name Name := {}
+  parents := parents.insert start start
+  let mut found : Array (String × Json) := #[]
+  while cursor < queue.size && cursor < 20000 && found.size < targets.size do
+    let current := queue[cursor]!
+    cursor := cursor + 1
+    if targets.contains current then
+      let mut path := [current.toString]
+      let mut node := current
+      let mut fuel := parents.size
+      while node != start && fuel > 0 do
+        node := (parents[node]?).getD start
+        path := node.toString :: path
+        fuel := fuel - 1
+      found := found.push (current.toString, toJson path)
+    for dependency in dependencies env current do
+      unless parents.contains dependency do
+        parents := parents.insert dependency current
+        queue := queue.push dependency
+  return Json.mkObj found.toList
+
+def inspect (roots allowed : Array String) (output : String) : CommandElabM Unit := do
   liftTermElabM do
     let env ← getEnv
     let mut declarations : Array Json := #[]
@@ -62,6 +98,7 @@ def inspect (roots : Array String) (output : String) : CommandElabM Unit := do
       let mod := env.header.moduleNames[idx]!
       unless modules.contains mod.toString do continue
       let axioms ← collectAxioms name
+      let rejected := axioms.filter (fun a => a == ``sorryAx || !allowed.contains a.toString)
       let statement ← Meta.ppExpr info.type
       let ranges ← findDeclarationRanges? name
       declarations := declarations.push <| Json.mkObj [
@@ -72,6 +109,7 @@ def inspect (roots : Array String) (output : String) : CommandElabM Unit := do
         ("type_expression", exprJson info.levelParams info.type),
         ("body_expression", (trackedBody info).map (exprJson info.levelParams) |>.getD Json.null),
         ("axioms", toJson (axioms.map Name.toString)),
+        ("axiom_paths", axiomPaths env name rejected),
         ("line", toJson (ranges.map (·.range.pos.line)))]
     liftM <| IO.FS.writeFile output <| (Json.mkObj [
       ("schema_version", toJson (1 : Nat)),

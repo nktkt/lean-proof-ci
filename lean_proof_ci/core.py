@@ -97,7 +97,22 @@ def digest(value: Any) -> str:
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
 
 
-def inspect_project(project: Path, config: Config) -> dict[str, Any]:
+def expression_dependencies(*expressions: Any) -> list[str]:
+    """Read constant/projection references from the inspector's structured expressions."""
+    pending = list(expressions)
+    names: set[str] = set()
+    while pending:
+        node = pending.pop()
+        if not isinstance(node, list):
+            continue
+        if node and node[0] in ("const", "proj"):
+            names.add(node[1])
+        pending.extend(child for child in node if isinstance(child, list))
+    return sorted(names)
+
+
+def inspect_project(project: Path, config: Config, *,
+                    dependency_graph: dict[str, list[str]] | None = None) -> dict[str, Any]:
     toolchain_file = project / "lean-toolchain"
     if not toolchain_file.is_file():
         raise AuditError(f"Missing lean-toolchain in {project}; use a pinned Lake project")
@@ -115,8 +130,9 @@ def inspect_project(project: Path, config: Config) -> dict[str, Any]:
         script = directory / "Inspect.lean"
         # Only validated module names enter import syntax; JSON strings are Lean-compatible here.
         roots = "#[" + ", ".join(json.dumps(m) for m in config.modules) + "]"
+        allowed = "#[" + ", ".join(json.dumps(a, ensure_ascii=False) for a in config.allowed_axioms) + "]"
         source = "import Lean\n" + "".join(f"import {m}\n" for m in config.modules)
-        source += inspector + f"\nrun_cmd LeanProofCI.inspect {roots} {json.dumps(str(result_file), ensure_ascii=False)}\n"
+        source += inspector + f"\nrun_cmd LeanProofCI.inspect {roots} {allowed} {json.dumps(str(result_file), ensure_ascii=False)}\n"
         script.write_text(source, encoding="utf-8")
         run(["lake", "env", "lean", str(script)], project, config.timeout_seconds)
         try:
@@ -132,7 +148,11 @@ def inspect_project(project: Path, config: Config) -> dict[str, Any]:
             declaration["statement_hash"] = digest(item["type_expression"])
             declaration["definition_hash"] = digest(item["body_expression"]) if item["body_expression"] is not None else None
             declaration["axioms"] = sorted(set(item["axioms"]))
+            declaration["axiom_paths"] = item["axiom_paths"]
             declarations.append(declaration)
+            if dependency_graph is not None:
+                dependency_graph[item["name"]] = expression_dependencies(
+                    item["type_expression"], item["body_expression"])
         manifest = project / "lake-manifest.json"
         snapshot = {
             "schema_version": SCHEMA_VERSION, "checker_version": __version__,
@@ -194,6 +214,13 @@ def validate_snapshot(snapshot: Any) -> None:
         if d.get("line") is not None and (type(d["line"]) is not int or d["line"] < 1):
             raise AuditError(f"Invalid line for {d['name']}")
         string_list(d.get("axioms"), f"{d['name']}.axioms")
+        paths = d.get("axiom_paths", {})
+        if not isinstance(paths, dict):
+            raise AuditError(f"Invalid axiom_paths for {d['name']}")
+        for axiom, path in paths.items():
+            string_list(path, f"{d['name']}.axiom_paths.{axiom}", nonempty=True)
+            if axiom not in d["axioms"] or path[0] != d["name"] or path[-1] != axiom:
+                raise AuditError(f"Invalid axiom path endpoints for {d['name']}")
 
 
 def load_snapshot(path: Path) -> dict[str, Any]:
@@ -210,10 +237,13 @@ def audit(snapshot: dict[str, Any]) -> list[dict[str, Any]]:
     allowed = set(snapshot["allowed_axioms"])
     for d in snapshot["declarations"]:
         if "sorryAx" in d["axioms"]:
-            findings.append({"code": "incomplete_proof", "declaration": d["name"], "message": "Depends on sorryAx, directly or transitively"})
+            findings.append({"code": "incomplete_proof", "declaration": d["name"],
+                             "paths": {a: p for a, p in d.get("axiom_paths", {}).items() if a == "sorryAx"},
+                             "message": "Depends on sorryAx, directly or transitively"})
         unexpected = sorted(set(d["axioms"]) - allowed - {"sorryAx"})
         if unexpected:
             findings.append({"code": "unapproved_axiom", "declaration": d["name"], "axioms": unexpected,
+                             "paths": {a: p for a, p in d.get("axiom_paths", {}).items() if a in unexpected},
                              "message": "Depends on unapproved axioms: " + ", ".join(unexpected)})
     return findings
 
@@ -239,6 +269,7 @@ def compare(current: dict[str, Any], baseline: dict[str, Any]) -> list[dict[str,
         a, b = old[name], new[name]
         if a["statement_hash"] != b["statement_hash"]:
             add("statement_changed", name, a["statement"], b["statement"])
+            changes[-1].update(before_hash=a["statement_hash"], after_hash=b["statement_hash"])
         if a["kind"] != b["kind"]:
             add("kind_changed", name, a["kind"], b["kind"])
         if a["module"] != b["module"]:
